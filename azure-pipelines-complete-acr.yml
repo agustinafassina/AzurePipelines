@@ -1,0 +1,61 @@
+name: $(SourceBranchName)_$(Build.SourceVersion)
+
+trigger:
+ branches:
+    include:
+      - main
+
+pr: none
+
+pool:
+  vmImage: 'ubuntu-24.04'
+
+steps:
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |
+      $fileName= "pipeline-detail.json"
+      $author="$(Build.SourceVersionMessage)"
+      $requestFor="$(Build.SourceVersionAuthor)"
+      $commitId= "$(Build.SourceVersion)"
+      $filePackageJsonVersion= Get-Content "package.json" | ConvertFrom-Json
+      $appVersion= $filePackageJsonVersion.version
+
+      $jsonPipelineDetail = @"
+      {
+          "Message": "$author",
+          "OwnerBranch": "$requestFor",
+          "AppVersion": "$appVersion",
+          "CommitId": "$commitId"
+      }
+      "@
+
+      New-Item -ItemType File -Name $fileName
+      $jsonPipelineDetail | Out-File $fileName -Encoding ascii -NoNewline
+
+      Get-Content "$fileName"
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(Build.SourcesDirectory)'
+    Contents: 'pipeline-detail.json'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
+
+- task: DockerInstaller@0
+  displayName: Azure login and repository
+- script: az acr login -u $(AZURECR_USER) -p $(AZURECR_PASSWORD) --name $(DOCKER_REPOSITORY_NAME)
+
+- task: DockerInstaller@0
+  displayName: Docker build
+- script: docker build -t $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):$(Build.SourceVersion) .
+
+- task: DockerInstaller@0
+  displayName: Push app container image to Azure Container Registry
+- script: docker push $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):$(Build.SourceVersion)
