@@ -3,3 +3,6 @@ This repository contains multiple Azure Pipelines, including basic pipelines tha
 
 ## Azure pipelines with Elastic Container Registry
 <img height="300" width="70%" src="ecr.png"  />
+
+## Azure pipelines with Azure Container Registries
+<img height="300" width="70%" src="acr.png"  />
