@@ -1,0 +1,72 @@
+name: $(SourceBranchName)_$(Build.SourceVersion)
+
+trigger:
+ branches:
+    include:
+      - main
+
+pr: none
+
+pool:
+  vmImage: 'ubuntu-24.04'
+
+steps:
+- script: |
+    aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com
+  displayName: 'Login to AWS and ECR'
+  env:
+    AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+    AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |
+      $fileName= "pipeline-detail.json"
+      $author="$(Build.SourceVersionMessage)"
+      $requestFor="$(Build.SourceVersionAuthor)"
+      $commitId= "$(Build.SourceVersion)"
+      $filePackageJsonVersion= Get-Content "package.json" | ConvertFrom-Json
+      $appVersion= $filePackageJsonVersion.version
+
+      $jsonPipelineDetail = @"
+      {
+          "Message": "$author",
+          "OwnerBranch": "$requestFor",
+          "AppVersion": "$appVersion",
+          "CommitId": "$commitId"
+      }
+      "@
+
+      New-Item -ItemType File -Name $fileName
+      $jsonPipelineDetail | Out-File $fileName -Encoding ascii -NoNewline
+
+      Get-Content "$fileName"
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(Build.SourcesDirectory)'
+    Contents: 'pipeline-detail.json'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
+
+- task: Bash@3
+  displayName: Build app container image
+  inputs:
+      targetType: 'inline'
+      script: |
+        docker build -t $(DOCKER_REPOSITORYNAME) .
+
+- task: Bash@3
+  displayName: Push app container image to ECR
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo "GIT COMMIT IS: $(Build.SourceVersion)"
+      docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
