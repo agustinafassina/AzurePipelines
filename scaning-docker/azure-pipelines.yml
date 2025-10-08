@@ -1,0 +1,51 @@
+name: $(SourceBranchName)_$(Build.SourceVersion)
+
+trigger:
+ branches:
+    include:
+      - main
+
+pr: none
+
+pool:
+  vmImage: 'ubuntu-24.04'
+
+steps:
+- script: |
+    aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com
+  displayName: 'Login to Aws and ECR'
+  env:
+    AWS_ACCESSKEYID: $(AWS_ACCESSKEYID)
+    AWS_SECRETACCESSKEY: $(AWS_SECRETACCESSKEY)
+
+- task: Bash@3
+  displayName: Build app with Docker
+  inputs:
+      targetType: 'inline'
+      script: |
+        docker build -t $(DOCKER_REPOSITORYNAME) .
+
+- task: Bash@3
+  displayName: 'Scan Docker Image with Trivy'
+  inputs:
+    targetType: 'inline'
+    script: |
+      # Instalar Trivy
+      sudo apt-get install -y wget gnupg2
+      sudo apt install jq
+      wget https://github.com/aquasecurity/trivy/releases/download/v0.67.0/trivy_0.67.0_Linux-64bit.deb
+      sudo dpkg -i trivy_0.67.0_Linux-64bit.deb
+      ls
+      SCAN_RESULT=$(trivy image --severity HIGH,CRITICAL --no-progress --format json $(DOCKER_REPOSITORY_NAME))
+      echo "$SCAN_RESULT" > trivy-report.json
+      echo "Scan report:"
+      echo "$SCAN_RESULT"
+
+- task: Bash@3
+  displayName: Push app container image to ECR
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo "GIT COMMIT IS: $(Build.SourceVersion)"
+      docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
