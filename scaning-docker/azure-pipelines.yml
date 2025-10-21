@@ -30,16 +30,29 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
-      # Instalar Trivy
-      sudo apt-get install -y wget gnupg2
-      sudo apt install jq
+      # Install Trivy
+      sudo apt-get update
+      sudo apt-get install -y wget gnupg2 jq
+
+      # Donwload trivy
       wget https://github.com/aquasecurity/trivy/releases/download/v0.67.0/trivy_0.67.0_Linux-64bit.deb
       sudo dpkg -i trivy_0.67.0_Linux-64bit.deb
-      ls
-      SCAN_RESULT=$(trivy image --severity HIGH,CRITICAL --no-progress --format json $(DOCKER_REPOSITORY_NAME))
+
+      SCAN_RESULT=$(trivy image --severity HIGH,CRITICAL --no-progress --format json "common-amazons3")
       echo "$SCAN_RESULT" > trivy-report.json
       echo "Scan report:"
       echo "$SCAN_RESULT"
+
+      declare -A severity_counts
+      for sev in CRITICAL HIGH MEDIUM LOW; do
+        count=$(jq --arg sev "$sev" '[.. | getpath(["Vulnerabilities"])? // [] | .[] | select(.Severity==$sev)] | length' trivy-report.json)
+        severity_counts[$sev]=$count
+      done
+
+      echo "Resumen de vulnerabilidades por severidad:"
+      for sev in "${!severity_counts[@]}"; do
+        echo "$sev: ${severity_counts[$sev]}"
+      done
 
 - task: Bash@3
   displayName: Push app container image to ECR
