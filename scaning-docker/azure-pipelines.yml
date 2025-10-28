@@ -30,35 +30,30 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
-      # Install Trivy
-      sudo apt-get update
-      sudo apt-get install -y wget gnupg2 jq
-
-      # Donwload trivy
+      sudo apt-get install -y wget gnupg2
+      sudo apt install jq -y
       wget https://github.com/aquasecurity/trivy/releases/download/v0.67.0/trivy_0.67.0_Linux-64bit.deb
       sudo dpkg -i trivy_0.67.0_Linux-64bit.deb
 
-      SCAN_RESULT=$(trivy image --severity HIGH,CRITICAL --no-progress --format json "common-amazons3")
-      echo "$SCAN_RESULT" > trivy-report.json
-      echo "Scan report:"
-      echo "$SCAN_RESULT"
+      echo "Docker image '$DOCKER_REPOSITORYNAME' built successfully."
 
-      declare -A severity_counts
-      for sev in CRITICAL HIGH MEDIUM LOW; do
-        count=$(jq --arg sev "$sev" '[.. | getpath(["Vulnerabilities"])? // [] | .[] | select(.Severity==$sev)] | length' trivy-report.json)
-        severity_counts[$sev]=$count
-      done
+      # Run vulnerability scan with Trivy
+      echo "Starting vulnerability scan on the image..."
+      trivy image --severity CRITICAL,HIGH,MEDIUM,LOW --exit-code 1 "$DOCKER_REPOSITORYNAME"
 
-      echo "Resumen de vulnerabilidades por severidad:"
-      for sev in "${!severity_counts[@]}"; do
-        echo "$sev: ${severity_counts[$sev]}"
-      done
+      # Check scan result
+      if [ $? -ne 0 ]; then
+        echo "Vulnerabilities detected in image '$DOCKER_REPOSITORYNAME'."
+        exit 1
+      else
+        echo "No critical, high, or medium vulnerabilities found."
+        exit 0
+      fi
 
 - task: Bash@3
   displayName: Push app container image to ECR
   inputs:
     targetType: 'inline'
     script: |
-      echo "GIT COMMIT IS: $(Build.SourceVersion)"
+      echo "Git commit: $(Build.SourceVersion)"
       docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
-      docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
