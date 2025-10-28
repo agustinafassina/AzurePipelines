@@ -12,4 +12,4 @@ This repository contains multiple Azure Pipelines, including basic pipelines tha
 ### Pipelines in the repository:
 - Pipelines with Azure Container Registries
 - Pipelines with Elastic Container Registry
-- Pipeline with a Docker vulnerability scanner
+- Pipeline with a Docker vulnerability scanner: scan with Trivy
