@@ -15,8 +15,8 @@ steps:
     aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com
   displayName: 'Login to Aws and ECR'
   env:
-    AWS_ACCESSKEYID: $(AWS_ACCESSKEYID)
-    AWS_SECRETACCESSKEY: $(AWS_SECRETACCESSKEY)
+    AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+    AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
 
 - task: Bash@3
   displayName: Build app with Docker
@@ -32,8 +32,15 @@ steps:
     script: |
       sudo apt-get install -y wget gnupg2
       sudo apt install jq -y
-      wget https://github.com/aquasecurity/trivy/releases/download/v0.67.0/trivy_0.67.0_Linux-64bit.deb
-      sudo dpkg -i trivy_0.67.0_Linux-64bit.deb
+      # Obtener la última versión de Trivy dinámicamente
+      TRIVY_VERSION=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep -oP '"tag_name": "\K[^"]+' | sed 's/v//')
+      if [ -z "$TRIVY_VERSION" ]; then
+        echo "Warning: Could not fetch latest Trivy version, using fallback v0.67.0"
+        TRIVY_VERSION="0.67.0"
+      fi
+      echo "Installing Trivy version: $TRIVY_VERSION"
+      wget https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.deb
+      sudo dpkg -i trivy_${TRIVY_VERSION}_Linux-64bit.deb
 
       echo "Docker image '$DOCKER_REPOSITORYNAME' built successfully."
 
@@ -51,9 +58,20 @@ steps:
       fi
 
 - task: Bash@3
-  displayName: Push app container image to ECR
+  displayName: 'Tag Docker image with commit SHA'
   inputs:
     targetType: 'inline'
     script: |
       echo "Git commit: $(Build.SourceVersion)"
       docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):latest
+
+- task: Bash@3
+  displayName: 'Push Docker image to ECR'
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo "Pushing image with tag: $(Build.SourceVersion)"
+      docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):latest
+      echo "Image pushed successfully to ECR"

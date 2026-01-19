@@ -19,41 +19,62 @@ steps:
     AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
 
 - task: PowerShell@2
+  displayName: 'Generate pipeline metadata'
+  continueOnError: true
   inputs:
     targetType: 'inline'
     script: |
-      $fileName= "pipeline-detail.json"
-      $author="$(Build.SourceVersionMessage)"
-      $requestFor="$(Build.SourceVersionAuthor)"
-      $commitId= "$(Build.SourceVersion)"
-      $filePackageJsonVersion= Get-Content "package.json" | ConvertFrom-Json
-      $appVersion= $filePackageJsonVersion.version
-
-      $jsonPipelineDetail = @"
-      {
-          "Message": "$author",
-          "OwnerBranch": "$requestFor",
-          "AppVersion": "$appVersion",
-          "CommitId": "$commitId"
+      $fileName = "pipeline-detail.json"
+      
+      # Validar que package.json existe
+      if (Test-Path "package.json") {
+        try {
+          $filePackageJsonVersion = Get-Content "package.json" | ConvertFrom-Json
+          $appVersion = $filePackageJsonVersion.version
+        } catch {
+          Write-Warning "Error reading package.json: $_"
+          $appVersion = "unknown"
+        }
+      } else {
+        Write-Warning "package.json not found, using default version"
+        $appVersion = "unknown"
       }
-      "@
-
-      New-Item -ItemType File -Name $fileName
-      $jsonPipelineDetail | Out-File $fileName -Encoding ascii -NoNewline
-
-      Get-Content "$fileName"
+      
+      # Crear objeto con metadata del pipeline
+      $pipelineDetail = @{
+        Message = "$(Build.SourceVersionMessage)"
+        OwnerBranch = "$(Build.SourceVersionAuthor)"
+        AppVersion = $appVersion
+        CommitId = "$(Build.SourceVersion)"
+        BranchName = "$(Build.SourceBranchName)"
+        BuildId = "$(Build.BuildId)"
+        BuildNumber = "$(Build.BuildNumber)"
+      }
+      
+      # Convertir a JSON de forma segura
+      $jsonPipelineDetail = $pipelineDetail | ConvertTo-Json -Compress
+      
+      # Guardar archivo
+      $jsonPipelineDetail | Out-File -FilePath $fileName -Encoding utf8 -NoNewline
+      
+      Write-Host "Pipeline metadata generated:"
+      Get-Content $fileName
 
 - task: CopyFiles@2
+  displayName: 'Copy metadata artifact'
   inputs:
     SourceFolder: '$(Build.SourcesDirectory)'
     Contents: 'pipeline-detail.json'
     TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    continueOnError: true
 
 - task: PublishBuildArtifacts@1
+  displayName: 'Publish metadata artifact'
   inputs:
     PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    ArtifactName: 'drop'
+    ArtifactName: 'pipeline-metadata'
     publishLocation: 'Container'
+    continueOnError: true
 
 - task: Bash@3
   displayName: Build app container image
@@ -63,10 +84,20 @@ steps:
         docker build -t $(DOCKER_REPOSITORYNAME) .
 
 - task: Bash@3
-  displayName: Push app container image to ECR
+  displayName: 'Tag Docker image with commit SHA and latest'
   inputs:
     targetType: 'inline'
     script: |
       echo "GIT COMMIT IS: $(Build.SourceVersion)"
       docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):latest
+
+- task: Bash@3
+  displayName: 'Push Docker image to ECR'
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo "Pushing image with tags: $(Build.SourceVersion) and latest"
       docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):latest
+      echo "Image pushed successfully to ECR"

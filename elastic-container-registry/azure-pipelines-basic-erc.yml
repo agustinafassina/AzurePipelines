@@ -26,10 +26,20 @@ steps:
         docker build -t $(DOCKER_REPOSITORYNAME) .
 
 - task: Bash@3
-  displayName: Push app container image to ECR and tag with $(Build.SourceVersion)
+  displayName: 'Tag Docker image with commit SHA and latest'
   inputs:
     targetType: 'inline'
     script: |
       echo "GIT COMMIT IS: $(Build.SourceVersion)"
       docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker tag $(DOCKER_REPOSITORYNAME):latest $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):latest
+
+- task: Bash@3
+  displayName: 'Push Docker image to ECR'
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo "Pushing image with tags: $(Build.SourceVersion) and latest"
       docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):$(Build.SourceVersion)
+      docker push $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(DOCKER_REPOSITORYNAME):latest
+      echo "Image pushed successfully to ECR"

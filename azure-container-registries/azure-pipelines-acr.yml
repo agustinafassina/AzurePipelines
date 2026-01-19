@@ -1,25 +1,65 @@
 name: $(SourceBranchName)_$(Build.SourceVersion)
 
 trigger:
- branches:
+  branches:
     include:
       - main
 
 pr: none
 
 pool:
-  vmImage: 'ubuntu-24.04'
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # Variables requeridas (configurar en Azure DevOps):
+  # - DOCKER_REPOSITORY_NAME: Nombre del ACR sin .azurecr.io (ej: myregistry)
+  # - DOCKER_IMAGE: Nombre de la imagen Docker
+  # 
+  # Service Connection requerida:
+  # - AzureSubscription: Service Connection de Azure Resource Manager
+  #   (Configurar en Project Settings → Service connections)
 
 steps:
+- task: AzureCLI@2
+  displayName: 'Login to Azure Container Registry'
+  inputs:
+    azureSubscription: 'AzureSubscription' # Configurar Service Connection de Azure (recomendado)
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az acr login --name $(DOCKER_REPOSITORY_NAME)
+      if [ $? -ne 0 ]; then
+        echo "Error: Failed to login to ACR"
+        exit 1
+      fi
+  # Alternativa si no tienes Azure Service Connection, descomenta las siguientes líneas:
+  # env:
+  #   AZURE_CREDENTIALS: $(AZURECR_USER):$(AZURECR_PASSWORD)
 
-- task: DockerInstaller@0
-  displayName: Azure login and repository
-- script: az acr login -u $(AZURECR_USER) -p $(AZURECR_PASSWORD) --name $(DOCKER_REPOSITORY_NAME)
+- task: Bash@3
+  displayName: 'Build Docker image'
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo "Building Docker image: $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE)"
+      docker build -t $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):$(Build.SourceVersion) \
+                   -t $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):latest \
+                   .
+      if [ $? -ne 0 ]; then
+        echo "Error: Docker build failed"
+        exit 1
+      fi
 
-- task: DockerInstaller@0
-  displayName: Docker build
-- script: docker build -t $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):$(Build.SourceVersion) .
-
-- task: DockerInstaller@0
-  displayName: Push app container image to Azure Container Registry
-- script: docker push $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):$(Build.SourceVersion)
+- task: Bash@3
+  displayName: 'Push Docker image to ACR'
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo "Pushing image with tags: $(Build.SourceVersion) and latest"
+      docker push $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):$(Build.SourceVersion)
+      docker push $(DOCKER_REPOSITORY_NAME)/$(DOCKER_IMAGE):latest
+      if [ $? -ne 0 ]; then
+        echo "Error: Docker push failed"
+        exit 1
+      fi
+      echo "Image pushed successfully to ACR"
