@@ -86,7 +86,6 @@ AzurePipelines/
 - **ECR**: build + push to AWS; “complete” adds metadata.
 - **Scanning**: build → Trivy (CRITICAL/HIGH/MEDIUM/LOW) → push to ECR only if scan passes.
 
-For more detail on design, variables, and practices, see `REVIEW_MEJORAS.md` and `CHANGELOG_MEJORAS.md` in the repo (if present).
 ---
 ## Español
 Colección de pipelines de **Azure DevOps** para construir imágenes Docker y publicarlas en **Azure Container Registry (ACR)** o **Amazon Elastic Container Registry (ECR)**, con opciones de metadata y escaneo de vulnerabilidades con Trivy.
