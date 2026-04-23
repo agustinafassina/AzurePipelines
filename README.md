@@ -1,4 +1,5 @@
 # 🚀 Azure Pipelines – Docker Build & Push
+
 ## English
 Collection of **Azure DevOps** pipelines to build Docker images and push them to **Azure Container Registry (ACR)** or **Amazon Elastic Container Registry (ECR)**, with optional metadata and vulnerability scanning via Trivy.
 
