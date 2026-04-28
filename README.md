@@ -70,6 +70,8 @@ Run parameters (passed as env vars to the script):
 - `kmsKeyArn` (optional) → `KMS_KEY_ARN`
 - `reportFormat` (default `CYCLONEDX_1_4`) → `REPORT_FORMAT`
 
+<img src="generate-packages-report/diagram/diagram.jpg" alt="Inspector SBOM report flow" width="100%" height="350" />
+
 ### Usage
 1. Copy the pipeline YAML you need into your repo (or use the path in this repo).
 2. In Azure DevOps: **Pipelines** → **New pipeline** → choose repo → select the `.yml` file.
@@ -182,6 +184,8 @@ Parámetros de ejecución (se pasan como env vars al script):
 - `ecrRepository` (opcional) → `ECR_REPOSITORY`
 - `kmsKeyArn` (opcional) → `KMS_KEY_ARN`
 - `reportFormat` (default `CYCLONEDX_1_4`) → `REPORT_FORMAT`
+
+<img src="generate-packages-report/diagram/diagram.jpg" alt="Flujo Inspector SBOM report" width="100%" height="350" />
 
 ### Uso
 1. Copia el YAML del pipeline que necesites a tu repositorio (o usa la ruta existente en este repo).
