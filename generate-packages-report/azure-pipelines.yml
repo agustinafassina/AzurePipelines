@@ -1,0 +1,89 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: awsRegion
+    displayName: AWS region (e.g. us-east-1)
+    type: string
+    default: us-east-1
+  - name: s3Bucket
+    displayName: S3 bucket for SBOM exports
+    type: string
+    default: ""
+  - name: s3Prefix
+    displayName: S3 prefix (default inspector/sbom)
+    type: string
+    default: inspector/sbom
+  - name: ecrRepository
+    displayName: Optional ECR repository name filter
+    type: string
+    default: ""
+  - name: kmsKeyArn
+    displayName: Optional KMS key ARN for S3 encryption
+    type: string
+    default: ""
+  - name: reportFormat
+    displayName: Inspector SBOM format
+    type: string
+    default: CYCLONEDX_1_4
+    values:
+      - CYCLONEDX_1_4
+      - SPDX_2_3
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: GenerateInspectorSbom
+    displayName: Generate Amazon Inspector SBOM report
+    jobs:
+      - job: Run
+        displayName: Run script and publish metadata
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -euo pipefail
+
+              echo "Ensuring dependencies..."
+              if ! command -v jq >/dev/null 2>&1; then
+                sudo apt-get update -y
+                sudo apt-get install -y jq
+              fi
+
+              if ! command -v aws >/dev/null 2>&1; then
+                echo "aws cli not found on agent. Install it or use an image with awscli."
+                exit 1
+              fi
+
+              aws --version
+              jq --version
+
+              chmod +x generate-packages-report/script.sh
+
+              # Run export + publish latest.json & metadata.json to S3
+              ./generate-packages-report/script.sh
+            displayName: Run Inspector export script
+            env:
+              # Required for aws cli auth (define these as secret pipeline variables)
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_SESSION_TOKEN: $(AWS_SESSION_TOKEN)
+
+              # Required by script.sh
+              AWS_REGION: ${{ parameters.awsRegion }}
+              S3_BUCKET: ${{ parameters.s3Bucket }}
+
+              # Optional by script.sh
+              S3_PREFIX: ${{ parameters.s3Prefix }}
+              ECR_REPOSITORY: ${{ parameters.ecrRepository }}
+              KMS_KEY_ARN: ${{ parameters.kmsKeyArn }}
+              REPORT_FORMAT: ${{ parameters.reportFormat }}
+
+          - bash: |
+              set -euo pipefail
+              echo "Done."
+              echo "Bucket: ${{ parameters.s3Bucket }}"
+              echo "Prefix: ${{ parameters.s3Prefix }}"
+              echo "Repo:   ${{ parameters.ecrRepository }}"
+            displayName: Print run summary
