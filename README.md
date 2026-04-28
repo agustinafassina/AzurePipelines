@@ -18,6 +18,7 @@ Collection of **Azure DevOps** pipelines to build Docker images and push them to
 | **ECR (basic)** | Amazon ECR | Build and push Docker image to ECR. |
 | **ECR (complete)** | Amazon ECR | Build, push, and metadata. |
 | **Scanning** | Amazon ECR | Build, **Trivy** scan (CRITICAL/HIGH/MEDIUM/LOW), push only if no vulnerabilities. |
+| **Inspector SBOM report** | Amazon Inspector + S3 | Generates an SBOM report via **Amazon Inspector**, stores it in S3, and maintains a stable `latest.json` + `metadata.json` for API consumption. |
 
 ### Prerequisites
 - **Azure DevOps** project.
@@ -48,6 +49,27 @@ Pipeline variables (mark credentials as **secret**):
 
 Same variables as ECR. Trivy is installed on the agent; version is fetched dynamically from GitHub.
 
+**Inspector SBOM report (Amazon Inspector → S3)**
+
+This pipeline runs `generate-packages-report/script.sh` which:
+- Starts an `inspector2 create-sbom-export` job
+- Polls until it completes
+- Copies the generated JSON to a stable `latest.json`
+- Uploads `metadata.json` describing the run (reportId, status, prefixes, etc.)
+
+Pipeline variables (mark credentials as **secret**):
+- `AWS_ACCESS_KEY_ID` – Access Key (secret).
+- `AWS_SECRET_ACCESS_KEY` – Secret Access Key (secret).
+- `AWS_SESSION_TOKEN` – Session token (secret, optional).
+
+Run parameters (passed as env vars to the script):
+- `awsRegion` (default `us-east-1`) → `AWS_REGION`
+- `s3Bucket` (**required**) → `S3_BUCKET`
+- `s3Prefix` (default `inspector/sbom`) → `S3_PREFIX`
+- `ecrRepository` (optional) → `ECR_REPOSITORY`
+- `kmsKeyArn` (optional) → `KMS_KEY_ARN`
+- `reportFormat` (default `CYCLONEDX_1_4`) → `REPORT_FORMAT`
+
 ### Usage
 1. Copy the pipeline YAML you need into your repo (or use the path in this repo).
 2. In Azure DevOps: **Pipelines** → **New pipeline** → choose repo → select the `.yml` file.
@@ -68,6 +90,9 @@ AzurePipelines/
 ├── elastic-container-registry/
 │   ├── azure-pipelines-basic-erc.yml     # ECR basic
 │   └── azure-pipelines-complete-ecr.yml  # ECR + metadata
+├── generate-packages-report/
+│   ├── azure-pipelines.yml               # Amazon Inspector SBOM → S3 (latest.json + metadata.json)
+│   └── script.sh
 └── scaning-docker/
     ├── azure-pipelines.yml               # Build + Trivy + push to ECR
     └── README.md
@@ -106,6 +131,7 @@ Colección de pipelines de **Azure DevOps** para construir imágenes Docker y pu
 | **ECR (básico)** | Amazon ECR | Build y push de imagen Docker a ECR. |
 | **ECR (completo)** | Amazon ECR | Build, push y generación de metadata. |
 | **Scanning** | Amazon ECR | Build, escaneo con **Trivy** (CRITICAL/HIGH/MEDIUM/LOW) y push solo si no hay vulnerabilidades. |
+| **Inspector SBOM report** | Amazon Inspector + S3 | Genera un reporte SBOM con **Amazon Inspector**, lo guarda en S3 y mantiene un `latest.json` + `metadata.json` estable para consumir desde una API. |
 
 ### Requisitos previos
 - **Azure DevOps** con un proyecto configurado.
@@ -136,6 +162,27 @@ Variables de pipeline (marcar como **secretas** las credenciales):
 
 Usa las mismas variables que los pipelines de ECR. Trivy se instala en el agente; la versión se obtiene dinámicamente desde GitHub.
 
+**Inspector SBOM report (Amazon Inspector → S3)**
+
+Este pipeline ejecuta `generate-packages-report/script.sh`, que:
+- Dispara un `inspector2 create-sbom-export`
+- Hace polling hasta que termine
+- Copia el JSON generado a un `latest.json` estable
+- Sube `metadata.json` con información de la corrida (reportId, status, prefixes, etc.)
+
+Variables de pipeline (marcar credenciales como **secretas**):
+- `AWS_ACCESS_KEY_ID` – Access Key (secreto).
+- `AWS_SECRET_ACCESS_KEY` – Secret Access Key (secreto).
+- `AWS_SESSION_TOKEN` – Session token (secreto, opcional).
+
+Parámetros de ejecución (se pasan como env vars al script):
+- `awsRegion` (default `us-east-1`) → `AWS_REGION`
+- `s3Bucket` (**obligatorio**) → `S3_BUCKET`
+- `s3Prefix` (default `inspector/sbom`) → `S3_PREFIX`
+- `ecrRepository` (opcional) → `ECR_REPOSITORY`
+- `kmsKeyArn` (opcional) → `KMS_KEY_ARN`
+- `reportFormat` (default `CYCLONEDX_1_4`) → `REPORT_FORMAT`
+
 ### Uso
 1. Copia el YAML del pipeline que necesites a tu repositorio (o usa la ruta existente en este repo).
 2. Crea un **nuevo pipeline** en Azure DevOps: *Pipelines* → *New pipeline* → *Azure Repos Git* (o GitHub, etc.) → selecciona el `.yml` correspondiente.
@@ -156,6 +203,9 @@ AzurePipelines/
 ├── elastic-container-registry/
 │   ├── azure-pipelines-basic-erc.yml     # ECR básico
 │   └── azure-pipelines-complete-ecr.yml  # ECR + metadata
+├── generate-packages-report/
+│   ├── azure-pipelines.yml               # Amazon Inspector SBOM → S3 (latest.json + metadata.json)
+│   └── script.sh
 └── scaning-docker/
     ├── azure-pipelines.yml               # Build + Trivy + push a ECR
     └── README.md
