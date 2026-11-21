@@ -24,7 +24,7 @@ Collection of **Azure DevOps** pipelines to build Docker images and push them to
 - **Azure DevOps** project.
 - **Dockerfile** in the repo root (or path specified in the pipeline).
 - For ACR: **Service Connection** (Azure Resource Manager) in the project.
-- For ECR: AWS credentials (Access Key ID and Secret Access Key) or AWS Service Connection.
+- For ECR, Scanning and Inspector SBOM: the [AWS Toolkit for Azure DevOps](https://marketplace.visualstudio.com/items?itemName=AmazonWebServices.aws-vsts-tools) extension and an **AWS Service Connection**.
 
 ### Configuration
 **Azure Container Registry (ACR)**
@@ -35,19 +35,35 @@ Collection of **Azure DevOps** pipelines to build Docker images and push them to
    - `DOCKER_REPOSITORY_NAME`: ACR name **without** `.azurecr.io` (e.g. `myregistry`).
    - `DOCKER_IMAGE`: image name (e.g. `my-app`).
 
+**AWS service connection (ECR, Scanning, Inspector SBOM)**
+
+The AWS pipelines use the `AWSShellScript@1` task, which authenticates through an Azure DevOps service connection instead of access keys stored in variables.
+
+1. Install the [AWS Toolkit for Azure DevOps](https://marketplace.visualstudio.com/items?itemName=AmazonWebServices.aws-vsts-tools) extension.
+2. **Project Settings** → **Service connections** → **New service connection** → **AWS**.
+3. Enter the Access Key ID and Secret Access Key (or a Role ARN to assume).
+4. Name it `aws-dev-connection` (or update `awsCredentials` in the YAML to match).
+
 **Amazon ECR (ECR)**
 
-Pipeline variables (mark credentials as **secret**):
+Variables defined directly in the YAML (replace them with your values):
+
+```yaml
+variables:
+  AWS_REGION: 'us-east-1'
+  AWS_ACCOUNTID: '123456789012'
+  DOCKER_REPOSITORYNAME: 'my-app'
+```
 
 - `AWS_ACCOUNTID` – AWS account ID.
 - `AWS_REGION` – Region (e.g. `us-east-1`).
-- `AWS_ACCESS_KEY_ID` – Access Key (secret).
-- `AWS_SECRET_ACCESS_KEY` – Secret Access Key (secret).
 - `DOCKER_REPOSITORYNAME` – ECR repository name.
 
 **Scanning (Trivy)**
 
-Same variables as ECR. Trivy is installed on the agent; version is fetched dynamically from GitHub.
+Same service connection and variables as ECR. Trivy is installed on the agent; version is fetched dynamically from GitHub.
+
+<img src="scaning-docker/workflow.png" alt="Scanning pipeline flow" width="90%" height="300" />
 
 **Inspector SBOM report (Amazon Inspector → S3)**
 
@@ -57,10 +73,7 @@ This pipeline runs `generate-packages-report/script.sh` which:
 - Copies the generated JSON to a stable `latest.json`
 - Uploads `metadata.json` describing the run (reportId, status, prefixes, etc.)
 
-Pipeline variables (mark credentials as **secret**):
-- `AWS_ACCESS_KEY_ID` – Access Key (secret).
-- `AWS_SECRET_ACCESS_KEY` – Secret Access Key (secret).
-- `AWS_SESSION_TOKEN` – Session token (secret, optional).
+Authentication: uses the `aws-dev-connection` service connection (no access keys in variables).
 
 Run parameters (passed as env vars to the script):
 - `awsRegion` (default `us-east-1`) → `AWS_REGION`
@@ -75,7 +88,7 @@ Run parameters (passed as env vars to the script):
 ### Usage
 1. Copy the pipeline YAML you need into your repo (or use the path in this repo).
 2. In Azure DevOps: **Pipelines** → **New pipeline** → choose repo → select the `.yml` file.
-3. Set variables and Service Connection as above.
+3. Set the variables in the YAML and the Service Connection as above.
 4. Run the pipeline (manually or via trigger).
 
 Pipelines are set to trigger on the `main` branch; you can change the `trigger` in each file.
@@ -97,6 +110,7 @@ AzurePipelines/
 │   └── script.sh
 └── scaning-docker/
     ├── azure-pipelines.yml               # Build + Trivy + push to ECR
+    ├── workflow.png
     └── README.md
 ```
 
@@ -139,7 +153,7 @@ Colección de pipelines de **Azure DevOps** para construir imágenes Docker y pu
 - **Azure DevOps** con un proyecto configurado.
 - **Dockerfile** en la raíz del repo (o ruta indicada en el pipeline).
 - Para ACR: **Service Connection** de tipo *Azure Resource Manager* en el proyecto.
-- Para ECR: credenciales AWS (Access Key ID y Secret Access Key) o Service Connection de AWS.
+- Para ECR, Scanning e Inspector SBOM: la extensión [AWS Toolkit for Azure DevOps](https://marketplace.visualstudio.com/items?itemName=AmazonWebServices.aws-vsts-tools) y una **Service Connection de AWS**.
 
 ### Configuración
 **Azure Container Registry (ACR)**
@@ -150,19 +164,35 @@ Colección de pipelines de **Azure DevOps** para construir imágenes Docker y pu
    - `DOCKER_REPOSITORY_NAME`: nombre del ACR **sin** `.azurecr.io` (ej: `miregistry`).
    - `DOCKER_IMAGE`: nombre de la imagen (ej: `mi-app`).
 
+**Service Connection de AWS (ECR, Scanning, Inspector SBOM)**
+
+Los pipelines de AWS usan la tarea `AWSShellScript@1`, que se autentica mediante una Service Connection de Azure DevOps en lugar de access keys guardadas en variables.
+
+1. Instala la extensión [AWS Toolkit for Azure DevOps](https://marketplace.visualstudio.com/items?itemName=AmazonWebServices.aws-vsts-tools).
+2. **Project Settings** → **Service connections** → **New service connection** → **AWS**.
+3. Ingresa el Access Key ID y el Secret Access Key (o un Role ARN para asumir).
+4. Nómbrala `aws-dev-connection` (o ajusta `awsCredentials` en el YAML).
+
 **Amazon ECR (ECR)**
 
-Variables de pipeline (marcar como **secretas** las credenciales):
+Variables definidas directamente en el YAML (reemplázalas con tus valores):
+
+```yaml
+variables:
+  AWS_REGION: 'us-east-1'
+  AWS_ACCOUNTID: '123456789012'
+  DOCKER_REPOSITORYNAME: 'my-app'
+```
 
 - `AWS_ACCOUNTID` – ID de la cuenta AWS.
 - `AWS_REGION` – Región (ej: `us-east-1`).
-- `AWS_ACCESS_KEY_ID` – Access Key (secreto).
-- `AWS_SECRET_ACCESS_KEY` – Secret Access Key (secreto).
 - `DOCKER_REPOSITORYNAME` – Nombre del repositorio en ECR.
 
 **Pipeline de scanning (Trivy)**
 
-Usa las mismas variables que los pipelines de ECR. Trivy se instala en el agente; la versión se obtiene dinámicamente desde GitHub.
+Usa la misma Service Connection y variables que los pipelines de ECR. Trivy se instala en el agente; la versión se obtiene dinámicamente desde GitHub.
+
+<img src="scaning-docker/workflow.png" alt="Flujo del pipeline de scanning" width="90%" height="300" />
 
 **Inspector SBOM report (Amazon Inspector → S3)**
 
@@ -172,10 +202,7 @@ Este pipeline ejecuta `generate-packages-report/script.sh`, que:
 - Copia el JSON generado a un `latest.json` estable
 - Sube `metadata.json` con información de la corrida (reportId, status, prefixes, etc.)
 
-Variables de pipeline (marcar credenciales como **secretas**):
-- `AWS_ACCESS_KEY_ID` – Access Key (secreto).
-- `AWS_SECRET_ACCESS_KEY` – Secret Access Key (secreto).
-- `AWS_SESSION_TOKEN` – Session token (secreto, opcional).
+Autenticación: usa la Service Connection `aws-dev-connection` (sin access keys en variables).
 
 Parámetros de ejecución (se pasan como env vars al script):
 - `awsRegion` (default `us-east-1`) → `AWS_REGION`
@@ -190,7 +217,7 @@ Parámetros de ejecución (se pasan como env vars al script):
 ### Uso
 1. Copia el YAML del pipeline que necesites a tu repositorio (o usa la ruta existente en este repo).
 2. Crea un **nuevo pipeline** en Azure DevOps: *Pipelines* → *New pipeline* → *Azure Repos Git* (o GitHub, etc.) → selecciona el `.yml` correspondiente.
-3. Configura las variables y la Service Connection según la tabla anterior.
+3. Configura las variables en el YAML y la Service Connection según lo anterior.
 4. Ejecuta el pipeline (manual o con el trigger definido en el YAML).
 
 Los pipelines están configurados para dispararse en la rama `main`; puedes cambiar el `trigger` en cada archivo.
@@ -212,6 +239,7 @@ AzurePipelines/
 │   └── script.sh
 └── scaning-docker/
     ├── azure-pipelines.yml               # Build + Trivy + push a ECR
+    ├── workflow.png
     └── README.md
 ```
 
