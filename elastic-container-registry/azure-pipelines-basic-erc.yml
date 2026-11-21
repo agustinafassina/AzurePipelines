@@ -8,15 +8,22 @@ trigger:
 pr: none
 
 pool:
-  vmImage: 'ubuntu-24.04'
+  vmImage: 'ubuntu-latest'
+
+variables:
+  AWS_REGION: 'us-east-1'                  # replace with the actual region
+  AWS_ACCOUNTID: '123456789012'            # replace with the AWS account ID
+  DOCKER_REPOSITORYNAME: 'my-app'          # replace with the ECR repository name
 
 steps:
-- script: |
-    aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com
+- task: AWSShellScript@1
   displayName: 'Login to AWS and ECR'
-  env:
-    AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-    AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+  inputs:
+    awsCredentials: 'aws-dev-connection'
+    regionName: '$(AWS_REGION)'
+    scriptType: 'inline'
+    inlineScript: |
+      aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNTID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 - task: Bash@3
   displayName: Build app container image

@@ -60,16 +60,17 @@ stages:
               jq --version
 
               chmod +x generate-packages-report/script.sh
+            displayName: Ensure dependencies
 
-              # Run export + publish latest.json & metadata.json to S3
-              ./generate-packages-report/script.sh
+          # Run export + publish latest.json & metadata.json to S3
+          - task: AWSShellScript@1
             displayName: Run Inspector export script
+            inputs:
+              awsCredentials: 'aws-dev-connection'
+              regionName: ${{ parameters.awsRegion }}
+              scriptType: 'filePath'
+              filePath: 'generate-packages-report/script.sh'
             env:
-              # Required for aws cli auth (define these as secret pipeline variables)
-              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
-              AWS_SESSION_TOKEN: $(AWS_SESSION_TOKEN)
-
               # Required by script.sh
               AWS_REGION: ${{ parameters.awsRegion }}
               S3_BUCKET: ${{ parameters.s3Bucket }}
